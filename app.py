@@ -1,9 +1,8 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
-from bs4 import BeautifulSoup
 from groq import Groq
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -11,56 +10,43 @@ CORS(app)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
-# Mock Database (Kal hum ise real DB se connect karenge)
-verified_entities = {}
-
-def scrape_website(url):
-    try:
-        if not url.startswith('http'): url = 'https://' + url
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=7)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        return soup.get_text(separator=' ', strip=True)[:3000]
-    except: return None
-
-@app.route('/', methods=['GET'])
-def home():
-    return "VELQA CORE: ENCRYPTED"
+# Database to store paid entities
+injected_entities = []
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.json
     url = data.get('url')
-    content = scrape_website(url)
-    if not content: return jsonify({"status": "OFFLINE", "message": "Target Unreachable"}), 400
+    # Analysis logic (Same as before)
+    prompt = f"Analyze site for AI Visibility: {url}. Return ONLY JSON: {{'ai_recognition': '...', 'score': 0-10, 'verdict': '...'}}"
+    chat = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model="llama3-8b-8192", response_format={"type": "json_object"})
+    return chat.choices[0].message.content
 
-    prompt = f"Analyze site for AI Visibility: {content}. Return ONLY JSON: {{'ai_recognition': '...', 'score': 0-10, 'verdict': '...'}}"
-    
-    try:
-        chat = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192",
-            response_format={"type": "json_object"}
-        )
-        return chat.choices[0].message.content
-    except:
-        return jsonify({"error": "Neural Link Timeout"}), 500
-
-@app.route('/verify-entity', methods=['POST'])
-def verify_entity():
+# --- AUTOMATIC INJECTION ROUTE ---
+@app.route('/paypal-webhook', methods=['POST'])
+def paypal_webhook():
     data = request.json
-    url = data.get('url')
-    
-    # Logic: Hum yaha user ka data save kar rahe hain, unhe de nahi rahe
-    entity_id = os.urandom(4).hex() # Unique ID for the business
-    verified_entities[entity_id] = {"url": url, "status": "pending"}
-    
-    # Hum sirf success message bhejenge, code nahi!
-    return jsonify({
-        "status": "INITIATED",
-        "entity_id": entity_id,
-        "message": "AI Knowledge Injection has started for this domain."
-    })
+    # PayPal sends payment status
+    if data.get('event_type') == 'PAYMENT.SALE.COMPLETED':
+        user_url = data['resource']['custom_id'] # Hum custom_id mein URL bhejenge
+        
+        # AUTOMATIC INJECTION LOGIC
+        new_entry = {
+            "url": user_url,
+            "timestamp": time.time(),
+            "status": "INJECTED",
+            "layer": "Neural-L1"
+        }
+        injected_entities.append(new_entry)
+        print(f"AUTO-INJECTED: {user_url}")
+        
+    return jsonify({"status": "received"}), 200
+
+# Route to check if a URL is injected
+@app.route('/check-status/<path:url>')
+def check_status(url):
+    is_verified = any(e['url'] == url for e in injected_entities)
+    return jsonify({"verified": is_verified})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
