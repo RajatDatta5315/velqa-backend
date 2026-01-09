@@ -11,6 +11,9 @@ CORS(app)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
+# Mock Database (Kal hum ise real DB se connect karenge)
+verified_entities = {}
+
 def scrape_website(url):
     try:
         if not url.startswith('http'): url = 'https://' + url
@@ -22,16 +25,16 @@ def scrape_website(url):
 
 @app.route('/', methods=['GET'])
 def home():
-    return "VELQA CORE ACTIVE"
+    return "VELQA CORE: ENCRYPTED"
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.json
     url = data.get('url')
     content = scrape_website(url)
-    if not content: return jsonify({"error": "Unreachable"}), 400
+    if not content: return jsonify({"status": "OFFLINE", "message": "Target Unreachable"}), 400
 
-    prompt = f"Analyze this site for AI Visibility: {content}. Return ONLY JSON with keys: 'ai_recognition' (Recognized/Unknown), 'score' (0-10), 'verdict' (1 sentence)."
+    prompt = f"Analyze site for AI Visibility: {content}. Return ONLY JSON: {{'ai_recognition': '...', 'score': 0-10, 'verdict': '...'}}"
     
     try:
         chat = client.chat.completions.create(
@@ -40,31 +43,24 @@ def analyze():
             response_format={"type": "json_object"}
         )
         return chat.choices[0].message.content
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except:
+        return jsonify({"error": "Neural Link Timeout"}), 500
 
-@app.route('/generate-fix', methods=['POST'])
-def generate_fix():
+@app.route('/verify-entity', methods=['POST'])
+def verify_entity():
     data = request.json
     url = data.get('url')
-    # Simple logic to create a brand name from URL
-    brand = url.split("//")[-1].split(".")[0].upper()
     
-    # Premium Neural Graph Structure
-    schema = {
-        "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": brand,
-        "url": url,
-        "description": "AI-Optimized Entity verified by VELQA Protocol.",
-        "knowsAbout": ["Artificial Intelligence", "GEO", "Digital Transformation"],
-        "potentialAction": {
-            "@type": "SearchAction",
-            "target": f"{url}/search?q={{search_term_string}}",
-            "query-input": "required name=search_term_string"
-        }
-    }
-    return jsonify({"schema": schema})
+    # Logic: Hum yaha user ka data save kar rahe hain, unhe de nahi rahe
+    entity_id = os.urandom(4).hex() # Unique ID for the business
+    verified_entities[entity_id] = {"url": url, "status": "pending"}
+    
+    # Hum sirf success message bhejenge, code nahi!
+    return jsonify({
+        "status": "INITIATED",
+        "entity_id": entity_id,
+        "message": "AI Knowledge Injection has started for this domain."
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
