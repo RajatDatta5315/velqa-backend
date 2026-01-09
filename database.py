@@ -16,15 +16,15 @@ def save_data(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f)
 
-# Global in-memory list synced with file
-injected_entities = load_data()
-
 def add_to_index(url):
-    global injected_entities
-    entry = {"url": url, "verified": True, "layer": "Neural-L1"}
-    injected_entities.append(entry)
-    save_data(injected_entities)
-    return entry
+    data = load_data()
+    # Check if already exists
+    if not any(e['url'] == url for e in data):
+        entry = {"url": url, "status": "INJECTED", "verified": True}
+        data.append(entry)
+        save_data(data)
+        return entry
+    return None
 
 def is_verified(url):
     data = load_data()
