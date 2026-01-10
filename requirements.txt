@@ -4,5 +4,5 @@ flask-cors
 requests
 beautifulsoup4
 groq
-sendgrid
 Pillow
+supabase
