@@ -1,31 +1,16 @@
-import json
 import os
+from supabase import create_client, Client
 
-DB_FILE = "data.json"
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 
-def load_data():
-    if not os.path.exists(DB_FILE):
-        return []
-    with open(DB_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except:
-            return []
+def add_to_index(brand_url):
+    # VELQA table mein data save karega
+    data = {"url": brand_url, "status": "injected"}
+    supabase.table("velqa_index").insert(data).execute()
 
-def save_data(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f)
-
-def add_to_index(url):
-    data = load_data()
-    # Check if already exists
-    if not any(e['url'] == url for e in data):
-        entry = {"url": url, "status": "INJECTED", "verified": True}
-        data.append(entry)
-        save_data(data)
-        return entry
-    return None
-
-def is_verified(url):
-    data = load_data()
-    return any(e['url'] == url for e in data)
+def get_kryv_user(email):
+    # KRYV users table se check karega
+    response = supabase.table("profiles").select("*").eq("email", email).execute()
+    return response.data
