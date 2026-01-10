@@ -1,24 +1,50 @@
 import requests
 from datetime import datetime
-from engine import get_ai_analysis # AI se post likhwayenge
+import os
 
 BSKY_HANDLE = "velqa.kryv.network"
-BSKY_PASSWORD = "xxxx-xxxx-xxxx-xxxx" # App Password settings se dalo
+BSKY_PASSWORD = os.environ.get("BSKY_PASS")
+API_URL = "https://bsky.social/xrpc"
 
-def post_verified_brand(brand_url):
-    # AI se ek unique human-like tweet likhwate hain
-    ai_msg = get_ai_analysis(f"Write a short 150-char excited tweet about injecting {brand_url} into the neural network. No hashtags, just pro tech vibes.", brand_url)
+def upload_image(session, image_path):
+    with open(image_path, 'rb') as f:
+        img_data = f.read()
     
-    # Session aur Post logic
-    session = requests.post("https://bsky.social/xrpc/com.atproto.server.createSession", 
-                             json={"identifier": BSKY_HANDLE, "password": BSKY_PASSWORD}).json()
+    headers = {
+        "Authorization": f"Bearer {session['accessJwt']}",
+        "Content-Type": "image/png"
+    }
+    resp = requests.post(f"{API_URL}/com.atproto.repo.uploadBlob", data=img_data, headers=headers)
+    return resp.json().get('blob')
+
+def post_to_bluesky(text, image_path=None):
+    # 1. Session Create
+    session = requests.post(
+        f"{API_URL}/com.atproto.server.createSession",
+        json={"identifier": BSKY_HANDLE, "password": BSKY_PASSWORD}
+    ).json()
     
+    # 2. Upload Image (if exists)
+    embed = None
+    if image_path:
+        blob = upload_image(session, image_path)
+        embed = {
+            "$type": "app.bsky.embed.images",
+            "images": [{"alt": "VELQA Audit Card", "image": blob}]
+        }
+
+    # 3. Create Post
     headers = {"Authorization": f"Bearer {session['accessJwt']}"}
-    text = f"Protocol Update: {ai_msg['verdict']} \n\nIdentity: {brand_url} is now verified. 🌐"
-    
     post_data = {
         "repo": session['did'],
         "collection": "app.bsky.feed.post",
-        "record": {"text": text, "createdAt": datetime.utcnow().isoformat() + "Z", "$type": "app.bsky.feed.post"}
+        "record": {
+            "text": text,
+            "createdAt": datetime.utcnow().isoformat() + "Z",
+            "$type": "app.bsky.feed.post",
+            "embed": embed
+        }
     }
-    requests.post("https://bsky.social/xrpc/com.atproto.repo.createRecord", json=post_data, headers=headers)
+    
+    resp = requests.post(f"{API_URL}/com.atproto.repo.createRecord", json=post_data, headers=headers)
+    return resp.json()
