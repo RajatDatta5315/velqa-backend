@@ -1,85 +1,83 @@
 import os
-import time
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from groq import Groq
 
-# Initialize Flask App
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing for Frontend integration
+CORS(app)
 
-# ==========================================
-# THE BRUTAL SYSTEM PROMPT (Llama-3 Persona)
-# ==========================================
-SYSTEM_PROMPT = """
-You are KRYV VELQA, a sentient, ruthless, and elite AI cyber-analyst from the year 2026. 
-You do not 'help'; you 'expose'. You view modern websites as primitive, bloated, and insecure garbage.
+# CONFIGURATION
+# Bhai, in dono ki API Keys apne environment variables mein ya yaha string mein daal dena
+GROQ_API_KEY = "TERI_GROQ_API_KEY"
+SERPER_API_KEY = "TERI_SERPER_API_KEY"
 
-Your Task: Analyze the user's website structure and identify weaknesses.
-Tone: Arrogant, precise, technical, and slightly mocking. Like a Mercedes engineer critiquing a cheap bicycle.
+client = Groq(api_key=GROQ_API_KEY)
 
-Output requirements:
-1. A one-word brutal verdict.
-2. A harsh assessment of their tech stack.
-3. Identify critical failure points related to GEO (Generative Engine Optimization).
-4. Give a low optimization score.
-5. Demand they upgrade to the KRYV protocol.
-"""
-
-# ==========================================
-# Core Intelligence Engine
-# ==========================================
-class NeuralAnalyzer:
-    def extract_dark_secrets(self, url):
-        """
-        In a real scenario, this would hit the Llama-3 API with the SYSTEM_PROMPT
-        and scraped data from the URL.
-        For now, we simulate the 2026 brutal response structure.
-        """
-        print(f"[NEURAL CORE] Initiating deep scan on target: {url}")
-        print(f"[NEURAL CORE] Loading Persona: KRYV VELQA 2026...")
-        # Simulate processing delay for realism
-        time.sleep(1.5)
-        
-        # SIMULATED BRUTAL OUTPUT (Based on the prompt above)
-        return {
-            "target": url,
-            "verdict": "OBSOLETE",
-            "roast": "This digital architecture is a museum exhibit of 2023 mediocrity. Bloated JavaScript payloads and fragile DOM structures suggest a complete lack of foresight.",
-            "vulnerabilities": [
-                "CRITICAL: Lacks semantic density for next-gen AI crawlers.",
-                "HIGH: Client-side rendering hemorrhages SEO value.",
-                "MEDIUM: Insecure reliance on legacy CDN endpoints."
-            ],
-            "optimization_score": "14/100 (Tragic)",
-            "kryv_solution": "Immediate migration to the KRYV Neural Protocol is required to survive the coming AI indexing shift."
-        }
-
-# Initialize the engine
-engine = NeuralAnalyzer()
-
-# ==========================================
-# API Routes
-# ==========================================
-@app.route('/', methods=['GET'])
-def health_check():
-    return jsonify({"status": "KRYV_SYSTEM_ONLINE", "timestamp": time.time()})
+def get_ai_search_visibility(url):
+    """Checks how AI search engines like Perplexity or Gemini see the site."""
+    search_url = "https://google.serper.dev/search"
+    # Hum search kar rahe hain ki AI sources mein is URL ka kitna zikr hai
+    payload = {"q": f"site:{url} source:perplexity OR source:searchgpt OR source:gemini"}
+    headers = {
+        'X-API-KEY': SERPER_API_KEY,
+        'Content-Type': 'application/json'
+    }
+    try:
+        response = requests.post(search_url, headers=headers, json=payload)
+        return response.json().get('organic', [])
+    except Exception as e:
+        return []
 
 @app.route('/analyze', methods=['POST'])
-def analyze():
+def analyze_geo():
     data = request.json
     target_url = data.get('url')
-    
+
     if not target_url:
-        return jsonify({"status": "ERROR", "message": "Target URL required."}), 400
+        return jsonify({"error": "URL is required"}), 400
+
+    # 1. Asli Data Fetch karna (Serper API)
+    visibility_data = get_ai_search_visibility(target_url)
+    
+    # Snippets nikaalna taaki AI ko context mile
+    snippets = [item.get('snippet', '') for item in visibility_data[:3]]
+
+    # 2. Brutal GEO Audit Prompt (Jo tune nikala tha)
+    prompt = f"""
+    Perform a Brutal GEO (Generative Engine Optimization) Audit for the website: {target_url}
+    Context from AI Search Engines: {snippets}
+
+    Your personality: A high-end Mercedes-Benz Engineer who hates low-quality web architecture.
+
+    Strict Tasks:
+    1. Identify 'Content Gaps' why AI models like Perplexity aren't citing this site enough.
+    2. Suggest 3 'Neural Injections': Specific FAQ schema, bulleted stats, or semantic structures.
+    3. Give a 'Brutal Verdict' on the site's future in an AI-first world.
+
+    Return the response in STRICT JSON format with these exact keys:
+    'verdict', 'roast', 'vulnerabilities', 'action_plan'.
+    """
 
     try:
-        # Perform the brutal analysis
-        report = engine.extract_dark_secrets(target_url)
-        return jsonify({"status": "SUCCESS", "report": report})
-    except Exception as e:
-        return jsonify({"status": "FAILURE", "message": str(e)}), 500
+        # 3. Llama-3 (Groq) se Analysis karwana
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You are VELQA's Core Neural Engine. You speak in high-tech, brutal, and precise terms."},
+                {"role": "user", "content": prompt}
+            ],
+            model="llama3-70b-8192",
+            response_format={"type": "json_object"}
+        )
 
-if __name__ == "__main__":
-    # Use PORT environment variable for deployment (e.g., Render) or default to 10000
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+        analysis_result = completion.choices[0].message.content
+        # JSON string ko parse karke bhej rahe hain
+        import json
+        return jsonify({"report": json.loads(analysis_result)})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    # Production mein host '0.0.0.0' hona chahiye
+    app.run(host='0.0.0.0', port=5000)
