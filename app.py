@@ -7,7 +7,7 @@ from groq import Groq
 
 app = Flask(__name__)
 
-# Strict CORS for production
+# Aggressive CORS for production
 CORS(app, resources={r"/*": {
     "origins": "*",
     "methods": ["GET", "POST", "OPTIONS"],
@@ -18,43 +18,67 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 @app.route('/', methods=['GET'])
 def health():
-    return "VELQA_CORE_V3_ONLINE", 200
+    return "VELQA_GEO_CORE_V1_ONLINE", 200
 
+# PURANA AUDIT ROUTE
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    if request.method == 'OPTIONS':
-        return '', 204
-        
     try:
         data = request.get_json()
         target_url = data.get('url')
-        
-        if not target_url:
-            return jsonify({"error": "TARGET_URL_MISSING"}), 400
-
-        # Serper SEO Context
         search_res = requests.post(
             "https://google.serper.dev/search",
             headers={'X-API-KEY': os.getenv("SERPER_API_KEY"), 'Content-Type': 'application/json'},
-            json={"q": f"site:{target_url} SEO weaknesses"},
+            json={"q": f"site:{target_url} SEO audit"},
             timeout=10
         )
-        
         snippets = [item.get('snippet', '') for item in search_res.json().get('organic', [])[:2]]
-        
-        # MODEL UPDATED TO llama-3.1-8b-instant
         prompt = f"Analyze {target_url}. Context: {snippets}. Output ONLY JSON: {{'verdict': '...', 'roast': '...', 'vulnerabilities': [...]}}"
-        
         chat = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.1-8b-instant",
             response_format={"type": "json_object"}
         )
-        
         return jsonify({"report": json.loads(chat.choices[0].message.content)})
-
     except Exception as e:
-        print(f"CRITICAL_EXCEPTION: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# NAYA REAL GEO OPTIMIZER ROUTE
+@app.route('/optimize', methods=['POST'])
+def optimize():
+    try:
+        data = request.get_json()
+        target_url = data.get('url')
+        biz_desc = data.get('business_description', 'Digital Entity')
+
+        # Serper context for GEO Gaps
+        search_res = requests.post(
+            "https://google.serper.dev/search",
+            headers={'X-API-KEY': os.getenv("SERPER_API_KEY"), 'Content-Type': 'application/json'},
+            json={"q": f"{target_url} {biz_desc} authority"},
+            timeout=10
+        )
+        context = str(search_res.json().get('organic', [])[:3])
+
+        prompt = f"""
+        Execute GEO Strategy for {target_url}. 
+        Business Context: {biz_desc}
+        Search Context: {context}
+
+        Return ONLY JSON with these keys:
+        1. 'ai_bait': A 60-word authoritative paragraph designed for LLM citation.
+        2. 'schema_json': Full JSON-LD markup for this entity.
+        3. 'backlink_plan': 3 specific article titles for Dev.to/Hashnode to hijack AI authority.
+        4. 'entity_graph': 5 main entities (keywords/topics) to link this brand with.
+        """
+
+        chat = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+            response_format={"type": "json_object"}
+        )
+        return jsonify({"plan": json.loads(chat.choices[0].message.content)})
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
