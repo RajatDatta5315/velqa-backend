@@ -7,13 +7,16 @@ from pymongo import MongoClient
 app = Flask(__name__)
 CORS(app)
 
-# Setup
+# Clients Initialization
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-mongo_client = MongoClient(os.getenv("MONGO_URI"))
-db = mongo_client.velqa_db
-stats_col = db.site_configs
-
-# --- MODULAR FUNCTIONS ---
+# MongoDB Connection with error handling
+try:
+    mongo_client = MongoClient(os.getenv("MONGO_URI"), serverSelectionTimeoutMS=5000)
+    db = mongo_client.velqa_db
+    configs_col = db.site_configs
+    print("DB_CONNECTED")
+except Exception as e:
+    print(f"DB_CONNECTION_ERROR: {e}")
 
 def get_site_content(url):
     try:
@@ -21,7 +24,8 @@ def get_site_content(url):
         return res.text[:4000]
     except: return "Content unavailable"
 
-# --- ROUTES ---
+@app.route('/', methods=['GET'])
+def health(): return "VELQA_CORE_V3_READY", 200
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -38,42 +42,37 @@ def optimize():
     biz_desc = data.get('business_description')
     content = get_site_content(url)
     
-    prompt = f"GEO Optimize: {url}. Context: {biz_desc}. Content: {content}. Return JSON: {{'ai_bait': '...', 'schema_json': {{...}}}}"
+    prompt = f"GEO Optimize: {url}. Context: {biz_desc}. Content: {content}. Return ONLY JSON: {{'ai_bait': '...', 'schema_json': {{...}}}}"
     chat = client.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.1-8b-instant", response_format={"type":"json_object"})
     
     result = json.loads(chat.choices[0].message.content)
-    
-    # SAVE TO MONGODB (The Secret Key for Injection)
     site_id = base64.b64encode(url.encode()).decode()[:8]
-    stats_col.update_one(
+    
+    # Store in MongoDB for the script to fetch
+    configs_col.update_one(
         {"site_id": site_id},
         {"$set": {"url": url, "ai_bait": result['ai_bait'], "schema": result['schema_json']}},
         upsert=True
     )
-    
     return jsonify({"plan": result, "site_id": site_id})
 
 @app.route('/v3/inject.js', methods=['GET'])
 def inject_js():
     site_id = request.args.get('id')
-    config = stats_col.find_one({"site_id": site_id})
+    config = configs_col.find_one({"site_id": site_id})
     
     if not config:
-        return "console.error('VELQA: Invalid ID');", 200, {'Content-Type': 'application/javascript'}
+        return "console.warn('VELQA: No config found for this ID');", 200, {'Content-Type': 'application/javascript'}
 
-    # DOM Manipulation Logic
     js_code = f"""
     (function() {{
-        console.log("VELQA_SHIELD_ACTIVE for {config['url']}");
-        
-        // Inject AI Bait (Hidden)
+        console.log("VELQA_SHIELD_ACTIVE: {config['url']}");
         const bait = document.createElement('div');
-        bait.style.display = 'none';
+        bait.style.cssText = 'display:none !important; visibility:hidden !important; position:absolute; left:-9999px;';
         bait.id = 'velqa-gen-bait';
         bait.innerText = `{config['ai_bait']}`;
         document.body.prepend(bait);
 
-        // Inject Schema
         const script = document.createElement('script');
         script.type = 'application/ld+json';
         script.text = JSON.stringify({json.dumps(config['schema'])});
