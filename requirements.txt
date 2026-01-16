@@ -4,3 +4,4 @@ pymongo
 atproto
 gunicorn
 python-dotenv
+requests
