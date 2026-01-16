@@ -1,30 +1,37 @@
-import os, requests, random, time
-from pymongo import MongoClient
+import os, requests, random
 from atproto import Client
 
-def post_to_bluesky():
-    # Loop to prevent immediate exit
-    while True:
-        try:
-            bsky = Client()
-            bsky.login(os.getenv("BSKY_HANDLE"), os.getenv("BSKY_PASSWORD"))
+def run_once():
+    try:
+        # 1. Login to Bluesky
+        bsky = Client()
+        bsky.login(os.getenv("BSKY_HANDLE"), os.getenv("BSKY_PASSWORD"))
+        
+        # 2. Get AI Content for Post
+        topics = ["Neural SEO", "GEO Optimization", "AI Agent Economy", "Future of Web3 Search"]
+        prompt = f"Write a cryptic and powerful 1-sentence tech prediction about {random.choice(topics)}. No hashtags."
+        
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {os.getenv('AI_API_KEY')}"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "system", "content": "You are VELQA AI, an advanced neural entity."},
+                             {"role": "user", "content": prompt}]
+            }
+        )
+        
+        if res.status_code == 200:
+            post_text = res.json()['choices'][0]['message']['content'].strip().replace('"', '')
             
-            # AI logic for main posts
-            topics = ["Future of AI SEO", "GEO Optimization", "Neural Web Trends"]
-            prompt = f"Write a professional but mysterious 1-sentence hype post about {random.choice(topics)}."
-            
-            # Groq Call for Post content
-            res = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {os.getenv('AI_API_KEY')}"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}]}
-            )
-            post_text = res.json()['choices'][0]['message']['content'].strip()
+            # 3. Post to Bluesky
+            bsky.send_post(text=f"🌌 VELQA_CORE: {post_text}")
+            print(f"✅ Hype post successful: {post_text}")
+        else:
+            print(f"❌ Groq Error: {res.text}")
 
-            bsky.send_post(text=f"🌌 VELQA NEURAL: {post_text}")
-            print("Main post successful")
-            
-            time.sleep(14400) # Wait 4 hours for next post
-        except Exception as e:
-            print(f"Worker error: {e}")
-            time.sleep(300)
+    except Exception as e:
+        print(f"❌ Worker error: {e}")
+
+if __name__ == "__main__":
+    run_once()
