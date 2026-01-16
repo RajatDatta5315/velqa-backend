@@ -1,23 +1,28 @@
-name: VELQA Bluesky Bot
+name: VELQA Neural Automation
 on:
   schedule:
-    - cron: '0 */4 * * *' # Har 4 ghante mein chalega
-  workflow_dispatch:
+    - cron: '0 */4 * * *' # Har 4 ghante mein auto-run
+  workflow_dispatch: # Manual button GitHub par
 
 jobs:
-  build:
+  bluesky-task:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
       - name: Install dependencies
-        run: pip install atproto pymongo python-dotenv
-      - name: Run Bot
+        run: |
+          pip install atproto pymongo python-dotenv
+
+      - name: Run Smart Comments
         env:
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
           BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
-        run: python automation_worker.py --mode=social
+        run: python comment_logic.py
