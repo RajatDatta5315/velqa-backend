@@ -1,33 +1,44 @@
 import os
-import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
 from core_engine import generate_neural_audit
-from automation_worker import post_to_bluesky
 
 app = Flask(__name__)
 CORS(app)
 
-client = MongoClient(os.getenv("MONGO_URI"))
-db = client['velqa_db']
-optimizations = db['optimizations']
+# MongoDB Setup
+try:
+    client = MongoClient(os.getenv("MONGO_URI"))
+    db = client['velqa_db']
+    optimizations = db['optimizations']
+except Exception as e:
+    print(f"MongoDB Connection Error: {e}")
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
-        domain = request.json.get('domain')
-        # Core Engine se asli data generate karo
+        data = request.json
+        domain = data.get('domain')
+        
+        if not domain:
+            return jsonify({"error": "Domain is required"}), 400
+
+        # Generate Detailed Audit
         result = generate_neural_audit(domain)
         
-        # Database mein save
-        optimizations.insert_one(result.copy())
+        # Save to Database
+        optimizations.update_one(
+            {"domain": domain}, 
+            {"$set": result}, 
+            upsert=True
+        )
         
-        # RESPONSE: Is format ko mat chhedna, frontend isi ko read karta hai
+        # Response for Portal.tsx
         return jsonify({
             "status": "Success",
             "script": f"https://api.velqa.kryv.network/v3/inject.js?id={result['site_id']}",
-            "data": result # <--- Ye portal ko audit/strat dikhayega
+            "data": result
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -36,14 +47,22 @@ def analyze():
 def inject_js():
     site_id = request.args.get('id')
     data = optimizations.find_one({"site_id": site_id})
+    
     if data:
-        return f"document.title = '{data['plan']['seo_strategy']['title']}';", 200, {'Content-Type': 'application/javascript'}
-    return "console.log('Error');", 404
+        # Injection logic: Updates Title and Logs Meta
+        strategy_title = data['plan']['seo_strategy']['title']
+        js_content = f"""
+        console.log('VELQA_NEURAL_ACTIVE: {site_id}');
+        document.title = '{strategy_title}';
+        """
+        return js_content, 200, {'Content-Type': 'application/javascript'}
+    
+    return "console.log('VELQA_ERROR: INVALID_ID');", 404
 
 @app.route('/')
 def home():
-    return jsonify({"status": "VELQA NEURAL ONLINE"})
+    return jsonify({"status": "VELQA NEURAL ONLINE", "version": "3.2.0"})
 
 if __name__ == "__main__":
-    threading.Thread(target=post_to_bluesky, daemon=True).start()
+    # Flask port management
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
