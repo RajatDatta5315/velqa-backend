@@ -1,76 +1,99 @@
 import os
 import random
+import time
 import requests
 from atproto import Client, models
 
-# AI Configuration (Uses Groq or OpenAI structure)
-AI_API_URL = "https://api.groq.com/openai/v1/chat/completions" # Example for Groq
-# Agar OpenAI use karna hai to: "https://api.openai.com/v1/chat/completions"
+# --- CONFIGURATION ---
+# Groq API URL
+AI_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Model ID: Using Llama 3 70B for high intelligence & speed
+AI_MODEL = "llama3-70b-8192" 
 
-def generate_ai_comment(post_text):
+def get_ai_comment(post_text):
     api_key = os.getenv("AI_API_KEY")
     if not api_key:
-        return "Great insight! Thanks for sharing." # Fallback if no key
+        print("⚠️ AI_API_KEY missing. Using fallback.")
+        return None
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    
-    # Prompt for the AI
+
+    # Prompt engineering for "Human-like" non-salesy interaction
+    system_prompt = (
+        "You are a casual, tech-savvy user on a social network. "
+        "Read the provided post and write a SINGLE short sentence (under 15 words) as a reply. "
+        "Tone: Friendly, appreciative, or slightly witty. "
+        "Rules: NO hashtags. NO sales pitches. NO robotic phrases like 'Great post'. "
+        "Just talk like a real human developer or enthusiast."
+    )
+
     payload = {
-        "model": "llama3-8b-8192", # Or "gpt-4o-mini" for OpenAI
+        "model": AI_MODEL,
         "messages": [
-            {
-                "role": "system", 
-                "content": "You are a tech-savvy user on Bluesky. Read the post and write a very short (under 20 words), casual, friendly, and non-salesy comment. Agree with them or add value. Do not use hashtags. Do not sound like a bot."
-            },
-            {
-                "role": "user", 
-                "content": f"Post content: {post_text}"
-            }
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Post content: {post_text}"}
         ],
-        "temperature": 0.7
+        "temperature": 0.8, # Thoda creative banaya hai
+        "max_tokens": 50
     }
 
     try:
         response = requests.post(AI_API_URL, json=payload, headers=headers)
         if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content'].strip()
+            comment = response.json()['choices'][0]['message']['content'].strip()
+            # Clean up quotes if AI adds them
+            return comment.replace('"', '').replace("'", "")
     except Exception as e:
-        print(f"AI Error: {e}")
+        print(f"❌ Groq API Error: {e}")
     
-    return "Solid point. Following this closely." # Fallback
+    return None
 
 def run_smart_comments():
     try:
+        print("--- STARTING NEURAL COMMENT ROUTINE ---")
         bsky = Client()
         bsky.login(os.getenv("BSKY_HANDLE"), os.getenv("BSKY_PASSWORD"))
         
-        topics = ["AI Agents", "SEO Tips", "ReactJS", "IndieHacker"]
+        # In topics par baat karega
+        topics = ["AI Agents", "SEO", "Web3 Dev", "Startup Life", "Coding"]
         query = random.choice(topics)
+        print(f"🔍 Searching topic: {query}")
         
         # Search recent posts
-        search_results = bsky.app.bsky.feed.search_posts(params=models.AppBskyFeedSearchPosts.Params(q=query, limit=3))
+        search_results = bsky.app.bsky.feed.search_posts(params=models.AppBskyFeedSearchPosts.Params(q=query, limit=5))
 
+        count = 0
         for post in search_results.posts:
-            # Generate AI Comment based on THEIR post content
-            comment_text = generate_ai_comment(post.record.text)
+            if count >= 2: break # Ek baar mein max 2 comments (Spam se bachne ke liye)
+
+            # Skip replies, only comment on root posts
+            if post.record.reply: continue
+
+            # Generate AI Comment
+            ai_reply = get_ai_comment(post.record.text)
             
-            try:
-                bsky.send_post(
-                    text=comment_text,
-                    reply_to=models.AppBskyFeedPost.ReplyRef(
-                        parent=models.ComAtprotoRepoStrongRef.Main(cid=post.cid, uri=post.uri),
-                        root=models.ComAtprotoRepoStrongRef.Main(cid=post.cid, uri=post.uri)
+            if ai_reply:
+                try:
+                    bsky.send_post(
+                        text=ai_reply,
+                        reply_to=models.AppBskyFeedPost.ReplyRef(
+                            parent=models.ComAtprotoRepoStrongRef.Main(cid=post.cid, uri=post.uri),
+                            root=models.ComAtprotoRepoStrongRef.Main(cid=post.cid, uri=post.uri)
+                        )
                     )
-                )
-                print(f"AI Commented on {post.author.handle}: {comment_text}")
-            except Exception as e:
-                print(f"Skipped post: {e}")
+                    print(f"✅ Commented on @{post.author.handle}: {ai_reply}")
+                    count += 1
+                    time.sleep(10) # Thoda wait karo taaki bot na lage
+                except Exception as e:
+                    print(f"⚠️ Post Failed: {e}")
+            else:
+                print("⏩ AI returned nothing, skipping.")
                 
     except Exception as e:
-        print(f"Bot Error: {e}")
+        print(f"❌ Automation Error: {e}")
 
 if __name__ == "__main__":
     run_smart_comments()
