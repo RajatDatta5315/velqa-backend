@@ -1,37 +1,37 @@
-import uuid
+import uuid, random
 from datetime import datetime
-import random
 
 def generate_neural_audit(domain):
     site_id = f"ID_{uuid.uuid4().hex[:7].upper()}"
     
-    # Roasts for different types of domains
-    roasts = [
-        f"Your SEO on {domain} is so weak, even Google's 404 page has more authority.",
-        f"{domain}? Looks like a 1995 template had a baby with a broken database.",
-        f"Neural scan complete. {domain} has the security of a screen door on a submarine.",
-        f"I've seen faster loading times on a dial-up connection in a rainstorm."
+    # Technical "Bad" Points (Fear/Credibility)
+    vulnerabilities = [
+        f"LCP (Largest Contentful Paint) for {domain} is above 3.5s",
+        "Missing X-Frame-Options Header (Clickjacking Risk)",
+        "Neural Schema mismatch: Local entities not linked",
+        "JavaScript Execution Thread blocking Main UI",
+        "Unminified CSS slowing down GEO-crawlers"
     ]
     
-    vulnerabilities_pool = [
-        "EXPOSED_METADATA_LEAK",
-        "NEURAL_LATENCY_CRITICAL",
-        "SCHEMA_INJECTION_VULNERABLE",
-        "AI_CRAWLER_BLOCK_MISSING",
-        "HEADER_SECURITY_FAIL",
-        "DOMAIN_INTEGRITY_LOW"
+    # Technical "Good" Points (Relief)
+    strengths = [
+        "SSL Integrity: Grade A+",
+        "Mobile Viewport Optimization: Active",
+        "Domain Authority Baseline: Stable",
+        "TTFB (Time to First Byte): Optimized"
     ]
 
     return {
         "domain": domain,
         "site_id": site_id,
-        "verdict": "VULNERABLE_CORE_DETECTED", # Match with AuditCore.tsx
-        "roast": random.choice(roasts),        # Match with AuditCore.tsx
-        "vulnerabilities": random.sample(vulnerabilities_pool, 3), # Match with AuditCore.tsx
+        "verdict": "VULNERABLE_BUT_OPTIMIZABLE",
+        "roast": f"Analysis for {domain}: Your technical SEO is leaking authority. While the baseline is stable, the neural discovery layer is missing.",
+        "vulnerabilities": random.sample(vulnerabilities, 3),
+        "strengths": random.sample(strengths, 2), # Naya field
         "plan": {
-            "ai_bait": f"Neural pattern for {domain} active.",
-            "seo_strategy": {"title": f"VELQA | {domain} Optimized"},
-            "neural_schema": {"@type": "WebSite", "name": domain}
+            "ai_bait": f"Neural pattern for {domain} generated. Ready for injection.",
+            "seo_strategy": {"title": f"VELQA | {domain} Neural Optimized"},
+            "gaps": ["Local GEO-fence missing", "Schema entity link broken"]
         },
         "timestamp": datetime.utcnow().isoformat()
     }
