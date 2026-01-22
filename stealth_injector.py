@@ -1,37 +1,61 @@
 import json
 
 def generate_stealth_script(domain, data):
-    # 1. Neural Schema (GEO Authority)
     schema = {
         "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        "name": domain,
-        "description": "Neural Optimized Entity via VELQA",
-        "areaServed": ["Global", "Targeted GEO Nodes"],
-        "hasMap": f"https://www.google.com/maps/search/{domain}"
+        "@type": "TechArticle",
+        "headline": f"Neural Optimization of {domain}",
+        "author": {"@type": "Organization", "name": "VELQA"}
     }
-
-    # 2. Neural Gaps (Hidden Competitor Keywords)
-    vulnerabilities = data.get('vulnerabilities', [])
-    # In vulnerabilities ko keywords mein badalna
-    gap_keywords = ", ".join([v.split(' ')[0] for v in vulnerabilities]) + ", Neural SEO, AI GEO Optimization"
-
+    
     js_code = f"""
     (function() {{
-        // A. Inject JSON-LD
-        const script = document.createElement('script');
-        script.type = 'application/ld+json';
-        script.text = JSON.stringify({json.dumps(schema)});
-        document.head.appendChild(script);
+        // 1. Load Pixi.js for Neural Graphics
+        const pixiScript = document.createElement('script');
+        pixiScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js';
+        document.head.appendChild(pixiScript);
 
-        // B. Inject Neural Gaps (Invisible Meta Tags)
-        const meta = document.createElement('meta');
-        meta.name = 'keywords';
-        meta.content = '{gap_keywords}';
-        document.head.appendChild(meta);
+        // 2. Inject Neural Schema
+        const schemaScript = document.createElement('script');
+        schemaScript.type = 'application/ld+json';
+        schemaScript.text = JSON.stringify({json.dumps(schema)});
+        document.head.appendChild(schemaScript);
 
-        // C. Console Identity
-        console.log('%c VELQA NEURAL ACTIVE ', 'color: cyan; background: black; font-weight: bold;');
+        // 3. Neural Rain Animation (Pixi.js)
+        pixiScript.onload = () => {{
+            console.log("VELQA: Neural Graphics Engine Engaged");
+            // Yahan hum background mein invisible canvas daal rahe hain
+            const app = new PIXI.Application({{ 
+                width: window.innerWidth, 
+                height: window.innerHeight, 
+                transparent: true, 
+                resolution: 1 
+            }});
+            app.view.style.position = 'fixed';
+            app.view.style.top = '0';
+            app.view.style.left = '0';
+            app.view.style.pointerEvents = 'none';
+            app.view.style.zIndex = '-1';
+            app.view.style.opacity = '0.1'; // Ekdum halka Matrix effect
+            document.body.appendChild(app.view);
+            
+            // Neural Rain Logic (Simplified)
+            const particles = [];
+            for(let i=0; i<50; i++) {{
+                const p = new PIXI.Graphics();
+                p.beginFill(0x00ffff); p.drawRect(0,0,2,10); p.endFill();
+                p.x = Math.random() * window.innerWidth;
+                p.y = Math.random() * window.innerHeight;
+                app.stage.addChild(p);
+                particles.push(p);
+            }}
+            app.ticker.add(() => {{
+                particles.forEach(p => {{
+                    p.y += 2;
+                    if(p.y > window.innerHeight) p.y = -10;
+                }});
+            }});
+        }};
     }})();
     """
     return js_code
