@@ -5,3 +5,5 @@ atproto
 gunicorn
 python-dotenv
 requests
+Mastodon.py
+APScheduler
