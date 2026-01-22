@@ -1,11 +1,11 @@
 import os
 import random
+import requests
+import time
 from atproto import Client
 from mastodon import Mastodon
 from apscheduler.schedulers.background import BackgroundScheduler
-import requests
 
-# --- AI CONFIG ---
 def get_ai_hype(topic):
     try:
         res = requests.post(
@@ -13,46 +13,45 @@ def get_ai_hype(topic):
             headers={"Authorization": f"Bearer {os.getenv('AI_API_KEY')}"},
             json={
                 "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "user", "content": f"Write a cryptic, 1-sentence tech prediction about {topic}. No hashtags. Pure cyberpunk vibe."}]
+                "messages": [{"role": "user", "content": f"Write a cryptic 1-sentence tech prediction about {topic}. No hashtags."}]
             }
         )
         return res.json()['choices'][0]['message']['content'].strip().replace('"', '')
     except:
         return f"Neural link active on {topic}."
 
-# --- POSTING LOGIC ---
 def broadcast_signal():
-    print("⚡️ INITIATING BROADCAST...")
-    topic = random.choice(["SEO Singularity", "AI Agents", "Decentralized Web", "Neural Search"])
+    print("🚀 BROADCAST STARTING...")
+    topic = random.choice(["SEO", "AI Agents", "Web3", "Neural Networks"])
     content = get_ai_hype(topic)
-    final_text = f"UNDEFINED_ENTITY: {content}"
-
-    # 1. Bluesky
+    
+    # Bluesky
     try:
         bsky = Client()
         bsky.login(os.getenv("BSKY_HANDLE"), os.getenv("BSKY_PASSWORD"))
-        bsky.send_post(text=final_text)
-        print("✅ Bluesky Sent")
-    except Exception as e:
-        print(f"❌ Bluesky Failed: {e}")
+        bsky.send_post(text=f"VELQA_CORE: {content}")
+        print("✅ Bluesky Success")
+    except Exception as e: print(f"❌ Bsky Error: {e}")
 
-    # 2. Mastodon (New Integration)
+    # Mastodon
     try:
-        # Mastodon ke liye tujhe access token chahiye hoga (niche bataunga kaise milega)
         if os.getenv("MASTODON_TOKEN"):
-            masto = Mastodon(
-                access_token=os.getenv("MASTODON_TOKEN"),
-                api_base_url=os.getenv("MASTODON_INSTANCE") # e.g., https://mastodon.social
-            )
-            masto.toot(final_text)
-            print("✅ Mastodon Sent")
-    except Exception as e:
-        print(f"❌ Mastodon Failed: {e}")
+            masto = Mastodon(access_token=os.getenv("MASTODON_TOKEN"), api_base_url=os.getenv("MASTODON_INSTANCE"))
+            masto.toot(f"VELQA_CORE: {content}")
+            print("✅ Mastodon Success")
+    except Exception as e: print(f"❌ Mastodon Error: {e}")
 
-# --- SCHEDULER ---
+# ANTI-SLEEP PING
+def ping_self():
+    url = os.getenv("SPACE_APP_URL") # Hugging Face ka app url (e.g. https://user-space.hf.space)
+    if url:
+        try:
+            requests.get(url)
+            print("⚡️ SELF-PING: Keeping Space Awake")
+        except: pass
+
 def start_bot_engine():
     scheduler = BackgroundScheduler()
-    # Har 4 ghante mein post karega
     scheduler.add_job(broadcast_signal, 'interval', hours=4)
+    scheduler.add_job(ping_self, 'interval', minutes=20) # Har 20 min mein jagayega
     scheduler.start()
-    print("🤖 BOT NEXUS ONLINE: Scheduler Running inside Koyeb")
