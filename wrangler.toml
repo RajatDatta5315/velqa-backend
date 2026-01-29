@@ -1,0 +1,7 @@
+name = "velqa-backend"
+main = "server_v2.py"
+compatibility_date = "2024-01-01"
+
+[vars]
+AI_API_KEY = "TERI_GROQ_KEY"
+SERPER_API_KEY = "TERI_SERPER_KEY"
