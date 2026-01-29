@@ -1,78 +1,72 @@
 from js import Response, fetch, Headers
 import json
-import uuid
-
-async def handle_analyze(request_data, env):
-    domain = request_data.get("domain", "unknown.com")
-    ai_key = env.get("AI_API_KEY")
-    serper_key = env.get("SERPER_API_KEY")
-    
-    # 1. Serper Search
-    serper_url = "https://google.serper.dev/search"
-    serper_headers = {"X-API-KEY": serper_key, "Content-Type": "application/json"}
-    serper_body = json.dumps({"q": f"{domain} technical review and history", "num": 4})
-    
-    serper_res = await fetch(serper_url, method="POST", headers=Headers.new(serper_headers), body=serper_body)
-    serper_json = await serper_res.json()
-    context_str = json.dumps(serper_json)
-    
-    site_id = f"ID_{uuid.uuid4().hex[:7].upper()}"
-
-    # 2. Neural Audit Prompt
-    prompt = f"DOMAIN: {domain}\nCONTEXT: {context_str}\nGenerate a DEEP NEURAL AUDIT JSON with history, roast, pros, cons, metrics, and solution promoting VELQA STEALTH SCRIPT."
-
-    ai_url = "https://api.groq.com/openai/v1/chat/completions"
-    ai_headers = {"Authorization": f"Bearer {ai_key}", "Content-Type": "application/json"}
-    ai_payload = json.dumps({
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": "You are VELQA Core. Output ONLY valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        "response_format": {"type": "json_object"}
-    })
-
-    ai_res = await fetch(ai_url, method="POST", headers=Headers.new(ai_headers), body=ai_payload)
-    ai_data = await ai_res.json()
-    
-    # AI response extraction
-    raw_content = ai_data.choices[0].message.content
-    audit_data = json.loads(raw_content)
-
-    return {
-        "status": "success",
-        "data": {
-            "domain": domain,
-            "site_id": site_id,
-            "history": audit_data.get("autobiography") or audit_data.get("history") or "History unavailable.",
-            "roast": audit_data.get("roast", "Scan complete."),
-            "vulnerabilities": audit_data.get("cons") or audit_data.get("vulnerabilities") or [],
-            "strengths": audit_data.get("pros") or audit_data.get("strengths") or [],
-            "metrics": audit_data.get("metrics", {"performance": "50/100"}),
-            "solution": audit_data.get("solution", "Inject VELQA Script.")
-        }
-    }
 
 async def on_fetch(request, env):
-    # Standard CORS Headers
-    res_headers = {
+    # CORS Headers initialization
+    headers = Headers.new({
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json"
-    }
+    })
 
     if request.method == "OPTIONS":
-        return Response.new("", status=204, headers=Headers.new(res_headers))
-    
+        return Response.new("", status=204, headers=headers)
+
+    if request.method == "GET":
+        return Response.new(json.dumps({"status": "VELQA_ONLINE"}), status=200, headers=headers)
+
     if request.method == "POST":
         try:
             body = await request.json()
-            result = await handle_analyze(body, env)
-            return Response.new(json.dumps(result), status=200, headers=Headers.new(res_headers))
-        except Exception as e:
-            err_data = {"error": str(e)}
-            return Response.new(json.dumps(err_data), status=500, headers=Headers.new(res_headers))
+            domain = body.get("domain", "unknown.com")
+            
+            # API Keys from Environment
+            ai_key = env.get("AI_API_KEY")
+            serper_key = env.get("SERPER_API_KEY")
 
-    # GET Request (Health Check)
-    return Response.new(json.dumps({"status": "VELQA_ONLINE"}), status=200, headers=Headers.new(res_headers))
+            # 1. Serper Search
+            serper_res = await fetch(
+                "https://google.serper.dev/search",
+                method="POST",
+                headers=Headers.new({"X-API-KEY": serper_key, "Content-Type": "application/json"}),
+                body=json.dumps({"q": f"{domain} technical history", "num": 3})
+            )
+            serper_data = await serper_res.text()
+
+            # 2. Groq AI Analysis
+            ai_payload = json.dumps({
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": "You are VELQA. Return JSON only."},
+                    {"role": "user", "content": f"Audit {domain} using context: {serper_data}. Include history, roast, pros, cons, and solution."}
+                ],
+                "response_format": {"type": "json_object"}
+            })
+
+            ai_res = await fetch(
+                "https://api.groq.com/openai/v1/chat/completions",
+                method="POST",
+                headers=Headers.new({"Authorization": f"Bearer {ai_key}", "Content-Type": "application/json"}),
+                body=ai_payload
+            )
+            ai_json = await ai_res.json()
+            
+            # Extract content correctly
+            audit_result = json.loads(ai_json.choices[0].message.content)
+
+            response_data = {
+                "status": "success",
+                "data": {
+                    "domain": domain,
+                    "history": audit_result.get("history", "Data hidden in neural gaps."),
+                    "roast": audit_result.get("roast", "Weak infrastructure detected."),
+                    "vulnerabilities": audit_result.get("cons", []),
+                    "strengths": audit_result.get("pros", []),
+                    "solution": audit_result.get("solution", "Inject VELQA Stealth Script.")
+                }
+            }
+            return Response.new(json.dumps(response_data), status=200, headers=headers)
+
+        except Exception as e:
+            return Response.new(json.dumps({"error": str(e)}), status=500, headers=headers)
