@@ -1,55 +1,93 @@
 import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from stealth_injector import generate_stealth_script
-from core_engine import generate_neural_audit
+import json
+import uuid
+import requests
+from datetime import datetime
 
-app = Flask(__name__)
-# Sabse zaruri: CORS allow karna taaki Frontend (Vercel) se request block na ho
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Headers for CORS
+HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json"
+}
 
-temp_store = {}
-
-@app.route('/analyze', methods=['POST'])
-def analyze():
+def get_real_data(domain, serper_key):
+    if not serper_key: return "No SERP context."
+    url = "https://google.serper.dev/search"
+    payload = json.dumps({"q": f"{domain} technical review and history", "num": 4})
+    headers = {'X-API-KEY': serper_key, 'Content-Type': 'application/json'}
     try:
-        data = request.json
-        if not data or 'domain' not in data:
-            return jsonify({"error": "No domain provided"}), 400
-            
-        domain = data.get('domain', '').strip().replace('https://', '').replace('http://', '')
-        
-        # Engine run karo
-        result = generate_neural_audit(domain)
-        site_id = result['site_id']
-        temp_store[site_id] = result
-        
-        # Ye link user ko dashboard pe dikhega
-        script_url = f"https://velqa.kryv.network/api/v3/stealth.js?id={site_id}"
-        
-        return jsonify({
-            "status": "Success",
-            "script": script_url,
-            "data": result
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        res = requests.post(url, headers=headers, data=payload)
+        return res.text
+    except: return "Search offline."
 
-@app.route('/v3/stealth.js', methods=['GET'])
-def get_stealth_js():
-    site_id = request.args.get('id')
-    data = temp_store.get(site_id)
+def handle_analyze(request_data, env):
+    domain = request_data.get("domain", "unknown.com")
+    ai_key = env.get("AI_API_KEY")
+    serper_key = env.get("SERPER_API_KEY")
     
-    if not data:
-        data = {"domain": "unknown", "vulnerabilities": ["INITIALIZING"]}
-        
-    js = generate_stealth_script(data['domain'], data)
-    return js, 200, {'Content-Type': 'application/javascript'}
+    context_str = get_real_data(domain, serper_key)
+    site_id = f"ID_{uuid.uuid4().hex[:7].upper()}"
 
-@app.route('/health')
-def health(): return "VELQA_ONLINE"
+    prompt = f"""
+    DOMAIN: {domain}
+    CONTEXT: {context_str}
+    TASK: DEEP NEURAL AUDIT.
+    1. AUTOBIOGRAPHY: 150-word tech history of {domain}. Repeatedly use name '{domain}'.
+    2. ROAST: Savage one-liner.
+    3. PROS: 3 tech strengths.
+    4. CONS: 3 critical flaws.
+    5. SOLUTION: Must mention 'VELQA STEALTH SCRIPT' to fix neural gaps.
+    OUTPUT ONLY VALID JSON:
+    {{
+        "autobiography": "text", "roast": "text", "pros": [], "cons": [],
+        "metrics": {{"performance": "45/100", "seo_health": "30%"}},
+        "solution": "text"
+    }}
+    """
 
-if __name__ == "__main__":
-    # Back4app/Render automatically port allocate karte hain
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    try:
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {ai_key}"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "system", "content": "You are VELQA Core. Brutal."},
+                             {"role": "user", "content": prompt}],
+                "response_format": { "type": "json_object" }
+            }
+        )
+        ai_res = res.json()['choices'][0]['message']['content']
+        data = json.loads(ai_res)
+    except:
+        data = {"autobiography": f"Failed to map {domain}", "roast": "Site too weak.", "pros": ["Online"], "cons": ["Neural Gap"], "metrics": {"performance": "0/100"}, "solution": "Inject VELQA."}
+
+    return {
+        "status": "success",
+        "data": {
+            "domain": domain,
+            "site_id": site_id,
+            "history": data.get("autobiography"),
+            "roast": data.get("roast"),
+            "vulnerabilities": data.get("cons"),
+            "strengths": data.get("pros"),
+            "metrics": data.get("metrics"),
+            "solution": data.get("solution")
+        }
+    }
+
+# Cloudflare Worker Entry Point
+def on_request(request, env):
+    if request.method == "OPTIONS":
+        return Response("", status=204, headers=HEADERS)
+    
+    if request.method == "POST":
+        try:
+            body = request.json()
+            result = handle_analyze(body, env)
+            return Response(json.dumps(result), status=200, headers=HEADERS)
+        except Exception as e:
+            return Response(json.dumps({"error": str(e)}), status=500, headers=HEADERS)
+
+    return Response("VELQA_ONLINE", status=200, headers=HEADERS)
