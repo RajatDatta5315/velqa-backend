@@ -1,11 +1,14 @@
-FROM python:3.11
+FROM python:3.9-slim
 
-WORKDIR /code
+WORKDIR /app
 
-COPY ./requirements.txt /code/requirements.txt
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Hugging Face defaults to port 7860
+# Isse Back4app ko port dikhega
+EXPOSE 5000
+
+# Server run karte waqt environment port use karega
 CMD ["python", "server_v2.py"]
