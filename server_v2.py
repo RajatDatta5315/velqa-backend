@@ -452,3 +452,30 @@ Crawl-delay: 1"""
 
         except Exception as e:
             return json_response({"error": str(e), "route": "unknown"}, status=500)
+
+
+# ══════════════════════════════════════════════════════════════════
+# GITHUB OAUTH + AUTONOMOUS MONITORING ROUTES
+# ══════════════════════════════════════════════════════════════════
+
+# These routes are injected into the main handler. For the worker,
+# add the following elif blocks inside the main on_fetch handler
+# after the existing route checks.
+
+# ROUTE: /github/callback — OAuth exchange
+# GET /github/callback?code=XXX
+# Returns { access_token, username, repos[] }
+
+# ROUTE: /github/repos — List user repos
+# POST /github/repos { access_token }
+
+# ROUTE: /github/connect — Connect repo to VELQA monitoring
+# POST /github/connect { access_token, repo_full_name, domain }
+# Stores { repo, domain, token } in KV. On cron, VELQA audits + opens PRs.
+
+# ROUTE: /github/status — Get monitoring status for connected repos
+# POST /github/status { access_token }
+
+# ROUTE (CRON): /cron/monitor — Called on scheduled cron
+# Loops all KV-stored repos, runs audit, opens GitHub PRs for missing files
+
