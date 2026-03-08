@@ -447,6 +447,111 @@ Crawl-delay: 1"""
                     "message": f"{brand_name} GEO Score: {score}/100 (Grade: {grade})"
                 })
 
+
+            # ═══ GITHUB OAUTH: /github/callback ═══════════════════════════
+            elif path == "/github/callback":
+                import urllib.parse as up
+                qs = up.parse_qs(request.url.split("?")[1] if "?" in request.url else "")
+                code = (qs.get("code") or [body.get("code", "")])[0]
+                if not code:
+                    return json_response({"error": "code required"}, status=400)
+                res = await fetch(
+                    "https://github.com/login/oauth/access_token",
+                    method="POST",
+                    headers=Headers.new({"Accept": "application/json", "Content-Type": "application/json"}),
+                    body=json.dumps({"client_id": env.GITHUB_CLIENT_ID, "client_secret": env.GITHUB_CLIENT_SECRET, "code": code})
+                )
+                td = await res.json()
+                token = td.get("access_token", "")
+                if not token:
+                    return json_response({"error": "OAuth failed", "detail": td}, status=400)
+                user_res = await fetch("https://api.github.com/user",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "User-Agent": "VELQA-GEO"}))
+                ud = await user_res.json()
+                return json_response({"access_token": token, "username": ud.get("login"), "avatar": ud.get("avatar_url")})
+
+            # ═══ GITHUB: /github/repos ══════════════════════════════════════
+            elif path == "/github/repos":
+                token = body.get("access_token", "")
+                if not token: return json_response({"error": "access_token required"}, status=400)
+                repos_res = await fetch("https://api.github.com/user/repos?per_page=50&sort=updated&type=all",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "User-Agent": "VELQA-GEO"}))
+                repos = await repos_res.json()
+                simplified = [{"full_name": r.get("full_name"), "name": r.get("name"), "description": r.get("description"), "html_url": r.get("html_url"), "private": r.get("private")} for r in repos if isinstance(r, dict)]
+                return json_response({"repos": simplified})
+
+            # ═══ GITHUB: /github/connect ════════════════════════════════════
+            elif path == "/github/connect":
+                token = body.get("access_token", "")
+                repo = body.get("repo_full_name", "")
+                domain = body.get("domain", "").replace("https://", "").replace("http://", "").strip("/")
+                if not all([token, repo, domain]):
+                    return json_response({"error": "access_token, repo_full_name, domain required"}, status=400)
+                record = json.dumps({"access_token": token, "repo": repo, "domain": domain, "connected_at": "2026"})
+                kv_key = f"velqa_repo_{repo.replace('/', '_')}"
+                await env.KV.put(kv_key, record)
+                audit = await call_groq(env.AI_API_KEY,
+                    "You are a GEO expert. Return JSON only.",
+                    f"Domain: {domain}. What GEO files are missing? Return: {{"missing": ["llms.txt"], "priority": "high", "summary": "brief"}}")
+                return json_response({"status": "connected", "repo": repo, "domain": domain, "first_audit": audit})
+
+            # ═══ GITHUB: /github/status ════════════════════════════════════
+            elif path == "/github/status":
+                token = body.get("access_token", "")
+                keys_res = await env.KV.list(prefix="velqa_repo_")
+                connected = []
+                for key_obj in (keys_res.get("keys") or []):
+                    val = await env.KV.get(key_obj["name"])
+                    if val:
+                        try:
+                            rec = json.loads(val)
+                            if rec.get("access_token") == token:
+                                connected.append({"repo": rec.get("repo"), "domain": rec.get("domain")})
+                        except: pass
+                return json_response({"connected_repos": connected, "count": len(connected)})
+
+            # ═══ GITHUB: /github/pr — auto-create GEO fix PR ═══════════════
+            elif path == "/github/pr":
+                token = body.get("access_token", "")
+                repo = body.get("repo_full_name", "")
+                file_type = body.get("file_type", "llms.txt")
+                domain = body.get("domain", "")
+                if not all([token, repo]): return json_response({"error": "access_token, repo_full_name required"}, status=400)
+                brand = domain.split(".")[0].capitalize() if domain else repo.split("/")[-1]
+                if file_type == "llms.txt":
+                    content_str = f"# {brand}\n\n> GEO optimization file auto-generated by VELQA — velqa.kryv.network\n\n## Product\n{brand} SaaS at https://{domain}\n\n## AI Crawler Permissions\nGPTBot: Allow\nClaude-Web: Allow\nPerplexityBot: Allow\nanthropic-ai: Allow\n\n*Auto-generated by VELQA*"
+                    filename = "public/llms.txt"
+                elif file_type == "robots.txt":
+                    content_str = f"User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nAllow: /\n\nUser-agent: Claude-Web\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nSitemap: https://{domain}/sitemap.xml"
+                    filename = "public/robots.txt"
+                else:
+                    content_str = f"{{\"name\": \"{brand}\"}}"
+                    filename = "public/schema.json"
+                import base64 as b64
+                encoded = b64.b64encode(content_str.encode()).decode()
+                # Get default branch SHA
+                ref_res = await fetch(f"https://api.github.com/repos/{repo}",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "User-Agent": "VELQA-GEO"}))
+                rd = await ref_res.json()
+                branch = rd.get("default_branch", "main")
+                ref2 = await fetch(f"https://api.github.com/repos/{repo}/git/refs/heads/{branch}",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "User-Agent": "VELQA-GEO"}))
+                ref2d = await ref2.json()
+                sha = ref2d.get("object", {}).get("sha", "")
+                br_name = f"velqa-{file_type.replace('.', '-')}-{sha[:6]}"
+                await fetch(f"https://api.github.com/repos/{repo}/git/refs", method="POST",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "VELQA-GEO"}),
+                    body=json.dumps({"ref": f"refs/heads/{br_name}", "sha": sha}))
+                await fetch(f"https://api.github.com/repos/{repo}/contents/{filename}", method="PUT",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "VELQA-GEO"}),
+                    body=json.dumps({"message": f"feat: add {filename} — GEO optimization by VELQA", "content": encoded, "branch": br_name}))
+                pr_res = await fetch(f"https://api.github.com/repos/{repo}/pulls", method="POST",
+                    headers=Headers.new({"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "VELQA-GEO"}),
+                    body=json.dumps({"title": f"[VELQA] Add {filename} for AI crawler GEO optimization", "body": f"Auto-generated by [VELQA](https://velqa.kryv.network)\n\nAdds `{filename}` to improve your GEO score by 15-25 points.\n\n*KRYV Network*", "head": br_name, "base": branch}))
+                prd = await pr_res.json()
+                return json_response({"status": "PR_CREATED", "pr_url": prd.get("html_url"), "pr_number": prd.get("number"), "file": filename})
+
+
             else:
                 return json_response({"error": f"Unknown route: {path}"}, status=404)
 
