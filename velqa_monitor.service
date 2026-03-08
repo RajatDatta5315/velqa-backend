@@ -1,0 +1,15 @@
+[Unit]
+Description=VELQA GEO Monitor — Local Linux Primary Runner
+Documentation=https://velqa.kryv.network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rajat
+ExecStart=/home/rajat/velqa-monitor.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=VELQA GEO Monitor — run every 5 minutes when PC is on
+Requires=velqa_monitor.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
