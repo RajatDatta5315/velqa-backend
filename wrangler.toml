@@ -4,16 +4,12 @@ compatibility_date = "2024-01-01"
 compatibility_flags = ["python_workers"]
 
 [vars]
-# Set these as secrets via: wrangler secret put SECRET_NAME
-# Required: AI_API_KEY (Groq), SERPER_API_KEY
-# For GitHub OAuth: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+# Secrets set via: wrangler secret put SECRET_NAME
 
-[[kv_namespaces]]
-binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-# Create with: wrangler kv:namespace create velqa_kv
-# Then replace the ID above
+[[d1_databases]]
+binding = "DB"
+database_name = "velqa-db"
+database_id = "REPLACE_WITH_VELQA_DB_ID"
 
 [triggers]
 crons = ["0 */6 * * *"]
-# Runs every 6 hours — scans all connected GitHub repos for GEO gaps

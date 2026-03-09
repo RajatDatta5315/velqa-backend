@@ -453,7 +453,7 @@ Crawl-delay: 1"""
                 # PC VIGILIS pings this every run to prevent cron from double-running
                 import time as _time
                 ts = str(int(_time.time()))
-                await env.KV.put("vigilis_heartbeat", ts)
+                await env.DB.prepare("INSERT OR REPLACE INTO velqa_kv (key, value) VALUES (?, ?)").bind("vigilis_heartbeat", ts).run()
                 return json_response({"status": "ok", "ts": ts, "message": "heartbeat_received"})
 
             # ═══ GITHUB OAUTH: /github/callback ═══════════════════════════
@@ -497,7 +497,7 @@ Crawl-delay: 1"""
                     return json_response({"error": "access_token, repo_full_name, domain required"}, status=400)
                 record = json.dumps({"access_token": token, "repo": repo, "domain": domain, "connected_at": "2026"})
                 kv_key = f"velqa_repo_{repo.replace('/', '_')}"
-                await env.KV.put(kv_key, record)
+                await env.DB.prepare("INSERT OR REPLACE INTO velqa_kv (key, value) VALUES (?, ?)").bind(kv_key, record).run()
                 audit = await call_groq(env.AI_API_KEY,
                     "You are a GEO expert. Return JSON only.",
                     f"Domain: {domain}. What GEO files are missing? Return: {{"missing": ["llms.txt"], "priority": "high", "summary": "brief"}}")
@@ -506,16 +506,14 @@ Crawl-delay: 1"""
             # ═══ GITHUB: /github/status ════════════════════════════════════
             elif path == "/github/status":
                 token = body.get("access_token", "")
-                keys_res = await env.KV.list(prefix="velqa_repo_")
+                rows_res = await env.DB.prepare("SELECT value FROM velqa_kv WHERE key LIKE 'velqa_repo_%'").all()
                 connected = []
-                for key_obj in (keys_res.get("keys") or []):
-                    val = await env.KV.get(key_obj["name"])
-                    if val:
-                        try:
-                            rec = json.loads(val)
-                            if rec.get("access_token") == token:
-                                connected.append({"repo": rec.get("repo"), "domain": rec.get("domain")})
-                        except: pass
+                for row in (rows_res.results or []):
+                    try:
+                        rec = json.loads(row["value"])
+                        if rec.get("access_token") == token:
+                            connected.append({"repo": rec.get("repo"), "domain": rec.get("domain")})
+                    except: pass
                 return json_response({"connected_repos": connected, "count": len(connected)})
 
             # ═══ GITHUB: /github/pr — auto-create GEO fix PR ═══════════════
@@ -565,17 +563,17 @@ Crawl-delay: 1"""
             elif path == "/cron/monitor":
                 import time as _time
                 # Heartbeat check: if VIGILIS on PC ran within last 2h, skip cron
-                hb = await env.KV.get("vigilis_heartbeat")
-                if hb:
-                    age = int(_time.time()) - int(hb)
-                    if age < 7200:  # 2 hours in seconds
+                hb_row = await env.DB.prepare("SELECT value FROM velqa_kv WHERE key = 'vigilis_heartbeat'").first()
+                if hb_row and hb_row.get("value"):
+                    age = int(_time.time()) - int(hb_row["value"])
+                    if age < 7200:
                         return json_response({"status": "skipped", "reason": "PC_active", "age_seconds": age})
 
                 # Run autonomous GitHub repo monitoring
-                keys_res = await env.KV.list(prefix="velqa_repo_")
+                rows_res = await env.DB.prepare("SELECT value FROM velqa_kv WHERE key LIKE 'velqa_repo_%'").all()
                 results = []
-                for key_obj in (keys_res.get("keys") or []):
-                    val = await env.KV.get(key_obj["name"])
+                for row in (rows_res.results or []):
+                    val = row.get("value")
                     if not val: continue
                     try:
                         rec = json.loads(val)
