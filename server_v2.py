@@ -498,9 +498,10 @@ Crawl-delay: 1"""
                 record = json.dumps({"access_token": token, "repo": repo, "domain": domain, "connected_at": "2026"})
                 kv_key = f"velqa_repo_{repo.replace('/', '_')}"
                 await env.DB.prepare("INSERT OR REPLACE INTO velqa_kv (key, value) VALUES (?, ?)").bind(kv_key, record).run()
+                _geo_prompt = "Domain: " + domain + ". What GEO files are missing? Return JSON: {missing: [llms.txt], priority: high, summary: brief}"
                 audit = await call_groq(env.AI_API_KEY,
                     "You are a GEO expert. Return JSON only.",
-                    f"Domain: {domain}. What GEO files are missing? Return: {{"missing": ["llms.txt"], "priority": "high", "summary": "brief"}}")
+                    _geo_prompt)
                 return json_response({"status": "connected", "repo": repo, "domain": domain, "first_audit": audit})
 
             # ═══ GITHUB: /github/status ════════════════════════════════════
